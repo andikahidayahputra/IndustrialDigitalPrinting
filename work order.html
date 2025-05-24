@@ -234,27 +234,8 @@
   </section>
 </div>
 
-<!-- Tambahkan Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
-
 <script>
-  // Konfigurasi Firebase
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-  };
-
-  // Inisialisasi Firebase
-  const app = firebase.initializeApp(firebaseConfig);
-  const database = firebase.database();
-
-  let editIndex = null; // Menyimpan key pekerjaan yang sedang diedit
+  let editIndex = -1; // Menyimpan index pekerjaan yang sedang diedit
 
   function formatDateIndo(dateStr) {
     if (!dateStr) return '-';
@@ -264,23 +245,20 @@
   }
 
   function loadPekerjaan() {
-    const pekerjaanRef = database.ref('pekerjaan');
-    pekerjaanRef.on('value', (snapshot) => {
-      const data = snapshot.val();
-      renderPekerjaanList(data);
-    });
+    const dp = localStorage.getItem('daftarPekerjaan');
+    return dp ? JSON.parse(dp) : [];
   }
 
   function savePekerjaan(data) {
-    const pekerjaanRef = database.ref('pekerjaan');
-    pekerjaanRef.set(data); // Simpan data ke Firebase
+    localStorage.setItem('daftarPekerjaan', JSON.stringify(data));
   }
 
-  function renderPekerjaanList(data) {
+  function renderPekerjaanList() {
+    const list = loadPekerjaan();
     const section = document.getElementById('listPekerjaanSection');
     const container = document.getElementById('listPekerjaan');
 
-    if (!data || Object.keys(data).length === 0) {
+    if (list.length === 0) {
       section.style.display = 'none';
       container.innerHTML = '';
       return;
@@ -289,8 +267,7 @@
     section.style.display = 'block';
     container.innerHTML = '';
 
-    Object.keys(data).forEach((key) => {
-      const item = data[key];
+    list.forEach((item, index) => {
       const card = document.createElement('div');
       card.className = 'pekerjaan-card';
 
@@ -327,42 +304,42 @@
       // Tambahkan tombol edit
       const editButton = document.createElement('button');
       editButton.textContent = 'Edit';
-      editButton.onclick = () => editPekerjaan(key);
+      editButton.onclick = () => editPekerjaan(index);
       card.appendChild(editButton);
 
       // Tambahkan tombol hapus
       const deleteButton = document.createElement('button');
       deleteButton.textContent = 'Hapus';
       deleteButton.className = 'delete-button'; // Tambahkan kelas untuk tombol hapus
-      deleteButton.onclick = () => deletePekerjaan(key);
+      deleteButton.onclick = () => deletePekerjaan(index);
       card.appendChild(deleteButton);
 
       container.appendChild(card);
     });
   }
 
-  function editPekerjaan(key) {
-    const pekerjaanRef = database.ref('pekerjaan/' + key);
-    pekerjaanRef.once('value').then((snapshot) => {
-      const pekerjaan = snapshot.val();
-      editIndex = key; // Simpan key pekerjaan yang sedang diedit
+  function editPekerjaan(index) {
+    const list = loadPekerjaan();
+    const pekerjaan = list[index];
+    editIndex = index; // Simpan index pekerjaan yang sedang diedit
 
-      // Isi form dengan data pekerjaan
-      document.getElementById('namaPekerjaan').value = pekerjaan.namaPekerjaan;
-      document.getElementById('tglMulai').value = pekerjaan.tglMulai;
-      document.getElementById('penanggungJawab').value = pekerjaan.penanggungJawab;
-      document.getElementById('deskripsiPekerjaan').value = pekerjaan.deskripsiPekerjaan;
-      document.getElementById('prioritas').value = pekerjaan.prioritas;
-      document.getElementById('tglSelesai').value = pekerjaan.tglSelesai;
-      document.getElementById('status').value = pekerjaan.status;
-      // Reset file input
-      document.getElementById('gambarPekerjaan').value = '';
-    });
+    // Isi form dengan data pekerjaan
+    document.getElementById('namaPekerjaan').value = pekerjaan.namaPekerjaan;
+    document.getElementById('tglMulai').value = pekerjaan.tglMulai;
+    document.getElementById('penanggungJawab').value = pekerjaan.penanggungJawab;
+    document.getElementById('deskripsiPekerjaan').value = pekerjaan.deskripsiPekerjaan;
+    document.getElementById('prioritas').value = pekerjaan.prioritas;
+    document.getElementById('tglSelesai').value = pekerjaan.tglSelesai;
+    document.getElementById('status').value = pekerjaan.status;
+    // Reset file input
+    document.getElementById('gambarPekerjaan').value = '';
   }
 
-  function deletePekerjaan(key) {
-    const pekerjaanRef = database.ref('pekerjaan/' + key);
-    pekerjaanRef.remove(); // Hapus pekerjaan dari Firebase
+  function deletePekerjaan(index) {
+    const list = loadPekerjaan();
+    list.splice(index, 1); // Hapus pekerjaan dari array
+    savePekerjaan(list); // Simpan kembali ke Local Storage
+    renderPekerjaanList(); // Render ulang daftar pekerjaan
   }
 
   document.getElementById('pekerjaanForm').addEventListener('submit', function(e) {
@@ -388,17 +365,19 @@
     }
 
     function simpanDanRender() {
-      const pekerjaanRef = database.ref('pekerjaan');
-      if (editIndex === null) {
-        pekerjaanRef.push(pekerjaan); // Tambah pekerjaan baru
+      const list = loadPekerjaan();
+      if (editIndex === -1) {
+        list.push(pekerjaan); // Tambah pekerjaan baru
       } else {
-        pekerjaanRef.child(editIndex).set(pekerjaan); // Update pekerjaan yang ada
-        editIndex = null; // Reset editIndex setelah update
+        list[editIndex] = pekerjaan; // Update pekerjaan yang ada
+        editIndex = -1; // Reset editIndex setelah update
       }
+      savePekerjaan(list);
       alert('Pekerjaan disimpan. Data pekerjaan akan tetap ada setelah disimpan.');
       form.reset();
       form.prioritas.selectedIndex = 0;
       form.status.selectedIndex = 0;
+      renderPekerjaanList();
     }
 
     if (file) {
@@ -415,12 +394,12 @@
 
   document.getElementById('btnClear').addEventListener('click', () => {
     if (confirm('Hapus semua pekerjaan?')) {
-      const pekerjaanRef = database.ref('pekerjaan');
-      pekerjaanRef.remove(); // Hapus semua pekerjaan dari Firebase
+      localStorage.removeItem('daftarPekerjaan');
+      renderPekerjaanList();
     }
   });
 
-  window.addEventListener('DOMContentLoaded', loadPekerjaan);
+  window.addEventListener('DOMContentLoaded', renderPekerjaanList);
 </script>
 </body>
 </html>
